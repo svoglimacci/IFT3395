@@ -1,5 +1,5 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 ######## DO NOT MODIFY THIS FUNCTION ########
 def draw_rand_label(x, label_list):
     seed = abs(np.sum(x))
@@ -14,7 +14,7 @@ def dist_func(p, x):
     return np.sum(np.abs(x - p), axis=1)
 
 def kernel_func(d, sigma, distance):
-    ((2*np.pi) ** d/2) * (sigma ** d) / np.exp(-0.5 * ((distance**2)/(sigma**2)))
+    return (1/((2*np.pi) ** d/2) * (sigma ** d)) * np.exp(-0.5 * ((distance**2)/(sigma**2)))
 
 
 
@@ -53,9 +53,8 @@ class HardParzen:
 
         for (i, ex) in enumerate(test_data):
            distances = dist_func(ex, self.train_inputs)
-           M = len(distances)
 
-           ind_neighbors = np.array([j for j in range(M) if distances[j] < self.h])
+           ind_neighbors = np.array([j for j in range(len(distances)) if distances[j] < self.h])
 
            if len(ind_neighbors) == 0:
                 classes_pred[i] = draw_rand_label(ex, self.label_list)
@@ -90,12 +89,12 @@ class SoftRBFParzen:
 
         for (i, ex) in enumerate(test_data):
            distances = dist_func(ex, self.train_inputs)
-           M = len(distances)
 
-           ind_neighbors = np.array([j for j in range(M) if distances[j] < self.sigma])
 
-           for k in ind_neighbors:
-                counts[i, int(self.train_labels[k]) - 1] += kernel_func(len(self.train_inputs[0]), self.sigma, test_data.shape[1]  )
+
+           for k in range(len(distances)):
+                counts[i, int(self.train_labels[k]) - 1] += kernel_func(len(self.train_inputs[0]), self.sigma, distances[k])
+
 
            classes_pred[i] = np.argmax(counts[i, :]) + 1
 
@@ -199,17 +198,43 @@ def get_test_errors(iris):
             temp = error
             min_sigma = sigma
 
-    return min_h, min_sigma
+    return [min_h, min_sigma]
 
 
 
 
 def random_projections(X, A):
-    pass
+    return np.matmul(X, A) / np.sqrt(2)
 
+def plot_error_rates(iris):
+    train_set, validation_set, _ = split_dataset(iris)
+
+    x_train = train_set[:, :4]
+    y_train = train_set[:, 4]
+
+    x_val = validation_set[:, :4]
+    y_val = validation_set[:, 4]
+
+    err_rate = ErrorRate(x_train, y_train, x_val, y_val)
+
+    h_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
+    sigma_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
+
+    hard_parzen_errors = [err_rate.hard_parzen(h) for h in h_values]
+    soft_parzen_errors = [err_rate.soft_parzen(sigma) for sigma in sigma_values]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(h_values, hard_parzen_errors, label='Hard Parzen', marker='o')
+    plt.plot(sigma_values, soft_parzen_errors, label='Soft Parzen', marker='x')
+    plt.xlabel('h and σ values')
+    plt.ylabel('Classification Error Rate')
+    plt.title('Classification Error Rates for Hard Parzen and Soft Parzen')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 if __name__ == '__main__':
     data = np.genfromtxt('iris.txt')
+    plot_error_rates(data)
 
 
-    print(get_test_errors(data))
