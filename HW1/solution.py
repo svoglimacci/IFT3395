@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+data = np.genfromtxt('iris.txt')
 ######## DO NOT MODIFY THIS FUNCTION ########
 def draw_rand_label(x, label_list):
     seed = abs(np.sum(x))
@@ -11,10 +12,12 @@ def draw_rand_label(x, label_list):
 #############################################
 
 def dist_func(p, x):
-    return np.sum(np.abs(x - p), axis=1)
+    return np.sum(np.abs(p - x), axis=1)
 
 def kernel_func(d, sigma, distance):
-    return (1/((2*np.pi) ** d/2) * (sigma ** d)) * np.exp(-0.5 * ((distance**2)/(sigma**2)))
+    return (1/(((2*np.pi) ** (d/2)) * (sigma ** d))) * np.exp(-0.5 * ((distance**2)/(sigma**2)))
+
+
 
 
 
@@ -23,7 +26,7 @@ def kernel_func(d, sigma, distance):
 class Q1:
 
     def feature_means(self, iris):
-        return np.mean(iris[0:4], axis=0)
+        return np.mean(iris[:, :-1], axis=0)
 
     def empirical_covariance(self, iris):
         return np.cov(iris[:, :4], rowvar=False)
@@ -90,10 +93,9 @@ class SoftRBFParzen:
         for (i, ex) in enumerate(test_data):
            distances = dist_func(ex, self.train_inputs)
 
-
-
            for k in range(len(distances)):
                 counts[i, int(self.train_labels[k]) - 1] += kernel_func(len(self.train_inputs[0]), self.sigma, distances[k])
+
 
 
            classes_pred[i] = np.argmax(counts[i, :]) + 1
@@ -148,7 +150,6 @@ class ErrorRate:
         for i in range(len(classes_pred)):
             if classes_pred[i] != self.y_val[i]:
                 count += 1
-
         return count / len(classes_pred)
 
     def soft_parzen(self, sigma):
@@ -167,7 +168,7 @@ class ErrorRate:
 
 
 def get_test_errors(iris):
-    train_set, validation_set, test_set = split_dataset(iris)
+    train_set, validation_set, _test_set = split_dataset(iris)
 
     x_train = train_set[:, :4]
     y_train = train_set[:, 4]
@@ -180,25 +181,21 @@ def get_test_errors(iris):
     h_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
     sigma_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
 
-    temp = np.inf
-    min_h = np.inf
-    min_sigma = np.inf
+    hard_errors = [err_rate.hard_parzen(h) for h in h_values]
+    soft_errors = [err_rate.soft_parzen(sigma) for sigma in sigma_values]
 
-    for h in h_values:
-        error = err_rate.hard_parzen(h)
-        if error < temp:
-            temp = error
-            min_h = h
+    h_star = h_values[np.argmin(hard_errors)]
+    sigma_star = sigma_values[np.argmin(soft_errors)]
 
-    temp = np.inf
+    x_test = _test_set[:, :4]
+    y_test = _test_set[:, 4]
 
-    for sigma in sigma_values:
-        error = err_rate.soft_parzen(sigma)
-        if error < temp:
-            temp = error
-            min_sigma = sigma
+    err_rate = ErrorRate(x_train, y_train, x_test, y_test)
 
-    return [min_h, min_sigma]
+    hard_error = err_rate.hard_parzen(h_star)
+    soft_error = err_rate.soft_parzen(sigma_star)
+
+    return hard_error, soft_error
 
 
 
@@ -206,8 +203,9 @@ def get_test_errors(iris):
 def random_projections(X, A):
     return np.matmul(X, A) / np.sqrt(2)
 
+
 def plot_error_rates(iris):
-    train_set, validation_set, _ = split_dataset(iris)
+    train_set, validation_set, _test_set = split_dataset(iris)
 
     x_train = train_set[:, :4]
     y_train = train_set[:, 4]
@@ -215,14 +213,18 @@ def plot_error_rates(iris):
     x_val = validation_set[:, :4]
     y_val = validation_set[:, 4]
 
-    err_rate = ErrorRate(x_train, y_train, x_val, y_val)
+    test_error = ErrorRate(x_train, y_train, x_val, y_val)
 
     h_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
     sigma_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
 
-    hard_parzen_errors = [err_rate.hard_parzen(h) for h in h_values]
-    soft_parzen_errors = [err_rate.soft_parzen(sigma) for sigma in sigma_values]
+    hard_parzen_errors = [test_error.hard_parzen(h) for h in h_values]
+    soft_parzen_errors = [test_error.soft_parzen(sigma) for sigma in sigma_values]
 
+    print("Hard Parzen Errors: ")
+    print(hard_parzen_errors)
+    print("Soft Parzen Errors: ")
+    print(soft_parzen_errors)
     plt.figure(figsize=(10, 6))
     plt.plot(h_values, hard_parzen_errors, label='Hard Parzen', marker='o')
     plt.plot(sigma_values, soft_parzen_errors, label='Soft Parzen', marker='x')
@@ -230,11 +232,62 @@ def plot_error_rates(iris):
     plt.ylabel('Classification Error Rate')
     plt.title('Classification Error Rates for Hard Parzen and Soft Parzen')
     plt.legend()
-    plt.grid(True)
-    plt.show()
+    plt.savefig('error_rates.png')
+
+def plot_random_proj(iris):
+    train_set, validation_set, _test_set = split_dataset(iris)
+
+    x_train = train_set[:, :4]
+    y_train = train_set[:, 4]
+
+    x_val = validation_set[:, :4]
+    y_val = validation_set[:, 4]
+
+    h_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
+    sigma_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 3.0, 10.0, 20.0]
+
+    hard_proj_errors = np.empty([500,10])
+    soft_proj_errors = np.empty([500,10])
+
+    for i in range(500):
+      A = np.random.normal(0, 1, (4, 2))
+      x_train_proj = random_projections(x_train, A)
+      x_val_proj = random_projections(x_val, A)
+      test_error = ErrorRate(x_train_proj, y_train, x_val_proj, y_val)
+
+      for j in range(len(h_values)):
+        hard_proj_errors[i][j] = test_error.hard_parzen(h_values[j])
+        soft_proj_errors[i][j] = test_error.soft_parzen(sigma_values[j])
+
+    hard_proj_avg = np.mean(hard_proj_errors, axis=0)
+    soft_proj_avg = np.mean(soft_proj_errors, axis=0)
+
+
+
+    plt.figure(figsize=(10, 6))
+    plt.errorbar(h_values, hard_proj_avg, yerr=np.std(hard_proj_errors, axis=0)*0.2, label='Hard Parzen', marker='o')
+    plt.errorbar(sigma_values, soft_proj_avg, yerr=np.std(soft_proj_errors, axis=0)*0.2, label='Soft Parzen', marker='x')
+
+    plt.xlabel('h and σ values')
+    plt.ylabel('Classification Error Rate')
+    plt.title('Classification Error Rates for Hard Parzen and Soft Parzen')
+    plt.legend()
+    plt.savefig('random_projections.png')
 
 if __name__ == '__main__':
-    data = np.genfromtxt('iris.txt')
+    q1 = Q1()
+    print(q1.feature_means(data))
+    print(q1.empirical_covariance(data))
+    print(q1.feature_means_class_1(data))
+    print(q1.empirical_covariance_class_1(data))
+
     plot_error_rates(data)
+    plot_random_proj(data)
+    print(get_test_errors(data))
+
+
+
+
+
 
 
